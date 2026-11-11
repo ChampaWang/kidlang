@@ -234,6 +234,6 @@ node test.js        # 69 条测试
 
 ## 协议
 
-[MIT](LICENSE)
+[MIT](LICENSE) © 2026 ChampaWang
 
-用的时候把 `LICENSE` 里的版权人改成你自己的名字或 GitHub 用户名就行。
+随便用、随便改、随便发，保留版权声明就行。
