@@ -216,7 +216,7 @@ python build/build-exe.py
 ├── examples/             九个示例程序（.kid）
 ├── docs/
 │   ├── SPEC.md           语言规范
-│   ├── handbook.pdf      11 页使用手册
+│   ├── handbook.pdf      13 页使用手册
 │   └── img/
 ├── assets/               图标与海报
 └── build/
