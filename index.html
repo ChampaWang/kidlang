@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小逻辑 v0.2 · 中文编程语言</title>
+<style>
+  :root {
+    --bg: #f3f5f9;
+    --surface: #ffffff;
+    --surface-2: #f8f9fc;
+    --border: #e2e6f0;
+    --text: #1b1f2a;
+    --muted: #6b7280;
+    --accent: #4f46e5;
+    --accent-soft: #eef0ff;
+    --accent-line: #c7cbf7;
+    --ok: #0d9b6c;
+    --ok-soft: #e6f7f1;
+    --err: #dc2f55;
+    --err-soft: #fdeef2;
+    --warn: #b45309;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --font-code: "Cascadia Code", "Consolas", "JetBrains Mono", "Microsoft YaHei", ui-monospace, monospace;
+    --lh: 24px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  .app { height: 100%; display: flex; flex-direction: column; }
+
+  header {
+    flex: none;
+    height: 58px;
+    padding: 0 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .brand { display: flex; align-items: baseline; gap: 9px; }
+  .brand h1 { font-size: 16px; font-weight: 650; letter-spacing: .3px; }
+  .brand .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); margin-right: 2px; transform: translateY(-1px);
+  }
+  .brand .sub { font-size: 11.5px; color: var(--muted); letter-spacing: .5px; }
+
+  .spacer { flex: 1; }
+  .controls { display: flex; align-items: center; gap: 8px; }
+
+  button {
+    font-family: inherit; font-size: 13px;
+    border: 1px solid var(--border);
+    background: var(--surface); color: var(--text);
+    padding: 7px 13px; border-radius: 8px; cursor: pointer;
+    transition: all .13s ease; white-space: nowrap; line-height: 1.2;
+  }
+  button:hover { background: var(--surface-2); border-color: #cfd5e4; }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  button.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+    font-weight: 550; box-shadow: 0 1px 2px rgba(79,70,229,.28);
+  }
+  button.primary:hover { background: #4438d6; border-color: #4438d6; }
+
+  select {
+    font-family: inherit; font-size: 13px; padding: 7px 10px;
+    border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text);
+    cursor: pointer; outline: none; max-width: 200px;
+  }
+
+  .speed { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding-left: 4px; }
+  .speed input { width: 68px; accent-color: var(--accent); cursor: pointer; }
+
+  main {
+    flex: 1; min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 14px; padding: 14px;
+  }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; display: flex; flex-direction: column;
+    min-height: 0; overflow: hidden;
+  }
+
+  .panel-head {
+    flex: none; height: 40px; padding: 0 14px;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .6px;
+  }
+  .panel-head .tag { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted); letter-spacing: 0; }
+
+  /* 编辑器 */
+  .editor-body { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+
+  .gutter {
+    flex: none; width: 46px; padding: 14px 0 60px; overflow: hidden;
+    background: var(--surface-2); border-right: 1px solid var(--border);
+    font-family: var(--font-code); font-size: 12.5px; line-height: var(--lh);
+    color: #b6bccb; text-align: right; user-select: none;
+  }
+  .gutter .gn { height: var(--lh); padding-right: 9px; }
+  .gutter .gn.active { color: var(--accent); font-weight: 700; }
+
+  .code-area { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+
+  .linehl { position: absolute; inset: 0; padding: 14px 0 60px; pointer-events: none; will-change: transform; }
+  .linehl .ln { height: var(--lh); border-left: 3px solid transparent; }
+  .linehl .ln.active { background: var(--accent-soft); border-left-color: var(--accent); }
+  .linehl .ln.err { background: var(--err-soft); border-left-color: var(--err); }
+
+  pre.hl-layer {
+    position: absolute; inset: 0;
+    padding: 14px 16px 60px 13px;
+    margin: 0; border: none;
+    font-family: var(--font-code); font-size: 14px; line-height: var(--lh);
+    white-space: pre; overflow: hidden;
+    color: var(--text); pointer-events: none; will-change: transform;
+    tab-size: 4;
+  }
+  .hl-kw   { color: #7c3aed; font-weight: 600; }
+  .hl-ty   { color: #0891b2; }
+  .hl-str  { color: #b45309; }
+  .hl-chr  { color: #b45309; }
+  .hl-num  { color: #0f766e; }
+  .hl-lit  { color: #db2777; font-weight: 600; }
+  .hl-cmt  { color: #a3abbd; font-style: italic; }
+  .hl-op   { color: #6b7280; }
+
+  textarea#code {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    padding: 14px 16px 60px 13px;
+    border: none; outline: none; resize: none; background: transparent;
+    color: transparent; caret-color: var(--text);
+    font-family: var(--font-code); font-size: 14px; line-height: var(--lh);
+    white-space: pre; overflow: auto; tab-size: 4;
+    user-select: text;
+  }
+  textarea#code::selection { background: #d8dcfb; }
+
+  .blocks {
+    flex: none; padding: 9px 12px; border-top: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 6px; background: var(--surface-2);
+  }
+  .blocks .lab { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; margin-right: 3px; }
+  .chip {
+    font-size: 12.5px; padding: 5px 11px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--surface);
+    cursor: pointer; color: #3b4252; transition: all .12s;
+  }
+  .chip:hover { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); }
+
+  .statusbar {
+    flex: none; min-height: 0; padding: 0 14px; font-size: 12.5px; line-height: 1.5;
+    display: flex; align-items: center; gap: 8px; transition: all .15s;
+  }
+  .statusbar.on { padding: 8px 14px; border-top: 1px solid var(--border); }
+  .statusbar.err { background: var(--err-soft); color: var(--err); }
+  .statusbar.good { background: var(--ok-soft); color: var(--ok); }
+  .statusbar .hint { color: var(--muted); font-size: 11.5px; }
+  .statusbar.err .hint { color: #b5607a; }
+
+  /* 右侧 */
+  .side { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+  .side-top { display: flex; flex-direction: column; gap: 14px; min-height: 0; flex: 1; }
+  .panel-vars { flex: none; max-height: 42%; }
+  .panel-log { flex: 1; min-height: 0; }
+  .panel-result { flex: 1.1; min-height: 0; }
+
+  .stage-body {
+    flex: 1; min-height: 80px; overflow: auto; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 7px;
+    background: radial-gradient(circle at 1px 1px, #e9ecf4 1px, transparent 0) 0 0 / 16px 16px;
+  }
+  .bubble {
+    align-self: flex-start; max-width: 92%;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px 12px 12px 3px; padding: 7px 12px;
+    font-size: 14px; line-height: 1.45;
+    box-shadow: 0 1px 2px rgba(27,31,42,.05);
+    animation: pop .18s ease-out; word-break: break-word;
+  }
+  .bubble:last-child { border-color: var(--accent-line); background: #fdfdff; }
+  .stage-empty { color: #b6bccb; font-size: 12.5px; padding: 6px 2px; }
+
+  @keyframes pop { from { opacity: 0; transform: translateY(4px) scale(.97); } to { opacity: 1; transform: none; } }
+
+  .guess {
+    flex: none; border-bottom: 1px solid var(--border); background: #fffbeb;
+    padding: 9px 14px; display: none; gap: 8px; align-items: center;
+  }
+  .guess.on { display: flex; }
+  .guess span { font-size: 12.5px; color: var(--warn); white-space: nowrap; }
+  .guess input {
+    flex: 1; min-width: 0; font-family: inherit; font-size: 13px;
+    padding: 5px 9px; border: 1px solid #f0d9a8; border-radius: 7px;
+    outline: none; background: #fff;
+  }
+  .guess button { padding: 5px 11px; font-size: 12.5px; }
+
+  /* 变量盒子 */
+  .vars-body {
+    flex: none; max-height: 148px; overflow: auto; padding: 10px 12px;
+    display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start;
+  }
+  .varbox {
+    flex: none;
+    border: 1px solid var(--border); border-radius: 9px;
+    padding: 5px 10px; background: var(--surface-2); min-width: 70px;
+    transition: all .18s ease;
+  }
+  .varbox .k { font-size: 11px; color: var(--muted); margin-bottom: 1px; white-space: nowrap; }
+  .varbox .k em {
+    font-style: normal; font-size: 9.5px; color: #9aa3b8;
+    background: #e8ecf6; border-radius: 3px; padding: 0 4px; margin-left: 4px;
+  }
+  .varbox .v {
+    font-family: var(--font-code); font-size: 14.5px; font-weight: 600;
+    color: var(--text); word-break: break-all;
+  }
+  .varbox.str .v { color: #b45309; font-weight: 500; font-size: 13px; }
+  .varbox.bool .v { color: #7c3aed; }
+  .varbox.arr .v { color: #0f766e; font-size: 12.5px; }
+  .varbox.bump {
+    border-color: var(--accent); background: var(--accent-soft);
+    transform: scale(1.06); box-shadow: 0 2px 8px rgba(79,70,229,.16);
+  }
+  .vars-empty { color: #b6bccb; font-size: 12.5px; }
+
+  /* 虚拟文件 */
+  .files-body {
+    flex: none; max-height: 124px; overflow: auto; padding: 9px 12px;
+    border-top: 1px dashed var(--border); display: none;
+    font-size: 12.5px; line-height: 1.5; background: #fbfcfe;
+  }
+  .files-body.on { display: block; }
+  .file-card { margin-bottom: 8px; }
+  .file-card:last-child { margin-bottom: 0; }
+  .file-card .fn {
+    font-family: var(--font-code); font-size: 12px; font-weight: 600;
+    color: var(--accent); margin-bottom: 3px;
+  }
+  .file-card .fn::before { content: "▤ "; opacity: .7; }
+  .file-card .fl {
+    font-family: var(--font-code); font-size: 12px; color: #4b5563;
+    padding-left: 9px; border-left: 2px solid #e2e6f0; white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* 旁白 */
+  .log-body {
+    flex: 1; min-height: 0; overflow: auto; padding: 8px 12px 12px;
+    font-size: 12.5px; line-height: 1.55;
+  }
+  .log-row {
+    display: flex; gap: 8px; padding: 3px 0;
+    border-bottom: 1px dashed #f0f2f7; animation: fadein .15s ease-out;
+  }
+  .log-row:last-child { border-bottom: none; }
+  .log-row .n {
+    flex: none; width: 26px; color: #b6bccb; font-family: var(--font-code);
+    font-size: 11px; text-align: right; padding-top: 2px;
+  }
+  .log-row .t { flex: 1; color: #40485a; word-break: break-word; }
+  .log-row.hl .t { color: var(--accent); font-weight: 550; }
+  .log-empty { color: #b6bccb; font-size: 12.5px; padding: 4px 2px; }
+
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb {
+    background: #d3d8e6; border-radius: 5px;
+    border: 2px solid transparent; background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #bcc3d6; background-clip: content-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @media (max-width: 940px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; padding: 10px; gap: 10px; }
+    header { height: 50px; padding: 0 8px; gap: 6px; overflow-x: auto; }
+    .spacer { display: none; }
+    .brand { flex: none; }
+    .brand h1 { font-size: 14px; white-space: nowrap; }
+    .brand .sub { display: none; }
+    .speed { display: none; }
+    #btnReset { display: none; }
+    header select { max-width: 84px; font-size: 11.5px; padding: 5px 4px; }
+    header button { padding: 5px 7px; font-size: 11.5px; }
+    .controls { margin-left: auto; gap: 5px; }
+    .panel-vars { max-height: none; }
+    .vars-body { max-height: 110px; }
+    .blocks { padding: 7px 9px; }
+    .chip { font-size: 11.5px; padding: 4px 9px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="brand">
+      <h1><span class="dot"></span>小逻辑</h1>
+      <span class="sub">中文编程语言 · v0.2</span>
+    </div>
+
+    <div class="spacer"></div>
+
+    <select id="examples" title="选择一个示例">
+      <option value="">— 打开示例 —</option>
+    </select>
+
+    <div class="controls">
+      <div class="speed">
+        <span>慢</span>
+        <input type="range" id="speed" min="40" max="600" step="20" value="200">
+        <span>快</span>
+      </div>
+      <button id="btnReset" title="重置 (F5)">重置</button>
+      <button id="btnStep" title="下一步 (F8)">下一步</button>
+      <button id="btnRun" class="primary" title="运行完 (F9)">运行完</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 左：编辑器 -->
+    <section class="panel">
+      <div class="panel-head">
+        程序
+        <span class="tag" id="tagInfo">—</span>
+      </div>
+
+      <div class="editor-body">
+        <div class="gutter" id="gutter"></div>
+        <div class="code-area">
+          <div class="linehl" id="linehl"></div>
+          <pre class="hl-layer" id="hlLayer"></pre>
+          <textarea id="code" spellcheck="false" autocomplete="off" autocorrect="off" wrap="off"></textarea>
+        </div>
+      </div>
+
+      <div class="blocks">
+        <span class="lab">插入：</span>
+        <span class="chip" data-tpl="say">输出</span>
+        <span class="chip" data-tpl="let">定义</span>
+        <span class="chip" data-tpl="if">如果 / 或者如果 / 否则</span>
+        <span class="chip" data-tpl="for">对于</span>
+        <span class="chip" data-tpl="while">当</span>
+        <span class="chip" data-tpl="func">函数</span>
+      </div>
+
+      <div class="statusbar" id="status"></div>
+    </section>
+
+    <!-- 右：可视化 -->
+    <div class="side">
+
+      <div class="side-top">
+        <section class="panel panel-vars">
+          <div class="panel-head">变量盒子</div>
+          <div class="vars-body" id="vars">
+            <div class="vars-empty">定义的变量会出现在这里。</div>
+          </div>
+        </section>
+
+        <section class="panel panel-log">
+          <div class="panel-head">
+            执行旁白
+            <span class="tag" id="logTag"></span>
+          </div>
+          <div class="log-body" id="log">
+            <div class="log-empty">每执行一步，这里会解释「刚才发生了什么」。</div>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel panel-result">
+        <div class="panel-head">
+          结果
+          <span class="tag" id="stageTag"></span>
+        </div>
+        <div class="guess" id="guessBar">
+          <span>先猜猜看，程序最后会输出什么？</span>
+          <input id="guessInput" type="text" placeholder="写下你的预测…">
+          <button id="guessCheck" class="primary">看答案</button>
+        </div>
+        <div class="stage-body" id="stage">
+          <div class="stage-empty">按 F9 运行，或 F8 一句一句走。双击这里（或按 F10）可以「猜结果」。</div>
+        </div>
+        <div class="files-body" id="files"></div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script src="interpreter.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var K = window.KidLang;
+  if (!K) { document.body.innerHTML = '<p style="padding:2rem">interpreter.js 未加载</p>'; return; }
+
+  /* ======================= 示例 ======================= */
+
+  var EXAMPLES = {
+    '① 类型与变量': [
+      '定义 整型 年龄 是 11',
+      '定义 浮点型 身高 是 1.52',
+      '定义 布尔型 爱编程 是 真',
+      "定义 字符型 等级 是 'A'",
+      '定义 字符串 名字 是 "小明"',
+      '',
+      '输出 "我叫" + 名字 + "，今年" + 年龄 + "岁"',
+      '输出 "身高" + 身高 + "米，评级" + 等级',
+      '输出 "喜欢编程吗？"',
+      '输出 爱编程'
+    ].join('\n'),
+
+    '② 分支：如果 / 或者如果 / 否则': [
+      '定义 整型 分数 是 87',
+      '',
+      '如果 分数 大于等于 90',
+      '    输出 "优秀"',
+      '或者如果 分数 大于等于 80',
+      '    输出 "良好"',
+      '或者如果 分数 大于等于 60',
+      '    输出 "及格"',
+      '否则',
+      '    输出 "要加油"',
+      '结束'
+    ].join('\n'),
+
+    '③ 三种循环': [
+      '# 对于：知道跑几次',
+      '定义 整型 和 是 0',
+      '对于 i 从 1 到 10',
+      '    给 和 加上 i',
+      '结束',
+      '输出 "1 加到 10 等于 " + 和',
+      '',
+      '# 当：条件成立就一直跑',
+      '定义 整型 n 是 1',
+      '当 n 小于等于 3',
+      '    输出 "当循环第 " + n + " 圈"',
+      '    给 n 加上 1',
+      '结束',
+      '',
+      '# 做…结束当：先跑一遍再说',
+      '定义 整型 k 是 0',
+      '做',
+      '    给 k 加上 1',
+      '结束当 k 小于 3',
+      '输出 "做循环跑了 " + k + " 圈"'
+    ].join('\n'),
+
+    '④ 函数：递归求阶乘': [
+      '定义 函数 阶乘 参数 整型 n',
+      '    如果 n 小于等于 1',
+      '        返回 1',
+      '    结束',
+      '    返回 n * 阶乘(n - 1)',
+      '结束',
+      '',
+      '对于 i 从 1 到 6',
+      '    输出 i + "! = " + 阶乘(i)',
+      '结束'
+    ].join('\n'),
+
+    '⑤ 数组：找最高分和平均分': [
+      '定义 数组 分数 是 [92, 78, 85, 60, 99]',
+      '定义 整型 最高 是 分数[0]',
+      '定义 整型 和 是 0',
+      '',
+      '对于 i 从 0 到 长度 分数 - 1',
+      '    如果 分数[i] 大于 最高',
+      '        把 最高 改成 分数[i]',
+      '    结束',
+      '    给 和 加上 分数[i]',
+      '结束',
+      '',
+      '输出 "最高分 " + 最高',
+      '输出 "平均分 " + 和 / 长度 分数'
+    ].join('\n'),
+
+    '⑥ 指针：改指针就是改变量': [
+      '定义 整型 分数 是 90',
+      '定义 指针 p 是 &分数',
+      '',
+      '输出 "分数是 " + 分数',
+      '输出 "指针 p 指向 " + p',
+      '输出 "顺着指针读到 " + *p',
+      '输出 "分数住在 " + 地址 分数',
+      '',
+      '把 *p 改成 100',
+      '输出 "通过指针改完，分数是 " + 分数'
+    ].join('\n'),
+
+    '⑦ 文件：写入再读回来': [
+      '定义 文件 f 是 打开文件 "成绩.txt" 为 写',
+      '写 f "小明 92"',
+      '写 f "小红 88"',
+      '写 f "小刚 75"',
+      '关闭 f',
+      '',
+      '定义 文件 g 是 打开文件 "成绩.txt" 为 读',
+      '定义 字符串 行 是 读 g',
+      '当 行 不等于 ""',
+      '    输出 "读到：" + 行',
+      '    把 行 改成 读 g',
+      '结束',
+      '关闭 g'
+    ].join('\n'),
+
+    '⑧ 会踩坑：类型对不上': [
+      '定义 整型 年龄 是 11.5',
+      '输出 年龄'
+    ].join('\n'),
+
+    '⑨ 会踩坑：忘了「结束」': [
+      '如果 真',
+      '    输出 "这句不会跑完"'
+    ].join('\n')
+  };
+
+  /* ======================= DOM ======================= */
+
+  var $ = function (id) { return document.getElementById(id); };
+  var codeEl = $('code'), gutter = $('gutter'), hlLayer = $('hlLayer'), linehl = $('linehl');
+  var stage = $('stage'), varsEl = $('vars'), logEl = $('log'), filesEl = $('files');
+  var statusEl = $('status'), tagInfo = $('tagInfo'), stageTag = $('stageTag'), logTag = $('logTag');
+  var btnRun = $('btnRun'), btnStep = $('btnStep'), btnReset = $('btnReset');
+  var speedEl = $('speed'), exSel = $('examples');
+  var guessBar = $('guessBar'), guessInput = $('guessInput'), guessCheck = $('guessCheck');
+
+  /* ======================= 状态 ======================= */
+
+  var runner = null;
+  var playing = null;
+  var stale = true;
+  var lastLine = 0;
+  var errorLine = 0;
+  var logCount = 0;
+  var outputItems = [];
+
+  var TPLS = {
+    say:    { line: '输出 "这里写要输出的内容"' },
+    let:    { line: '定义 整型 名字 是 0' },
+    if:     { open: '如果 条件', close: '结束', block: true },
+    for:    { open: '对于 i 从 1 到 10', close: '结束', block: true },
+    while:  { open: '当 条件', close: '结束', block: true },
+    func:   { open: '定义 函数 名字 参数 a b', close: '结束', block: true }
+  };
+
+  /* ======================= 编辑器渲染 ======================= */
+
+  function lineCount() { return codeEl.value.split('\n').length; }
+
+  function renderGutter() {
+    var n = lineCount(), html = '';
+    for (var i = 1; i <= n; i++) {
+      html += '<div class="gn' + (i === lastLine ? ' active' : '') + '">' + i + '</div>';
+    }
+    gutter.innerHTML = html;
+    syncScroll();
+  }
+
+  function renderLineHl() {
+    var n = lineCount(), html = '';
+    for (var i = 1; i <= n; i++) {
+      var cls = 'ln';
+      if (i === lastLine) cls += ' active';
+      if (i === errorLine) cls += ' err';
+      html += '<div class="' + cls + '"></div>';
+    }
+    linehl.innerHTML = html;
+    syncScroll();
+  }
+
+  var hlTimer = null;
+  function scheduleHighlight() {
+    clearTimeout(hlTimer);
+    hlTimer = setTimeout(renderHighlightText, 30);
+  }
+
+  function renderHighlightText() {
+    hlLayer.innerHTML = K.highlight(codeEl.value) + '\n ';
+    syncScroll();
+  }
+
+  function syncScroll() {
+    var x = codeEl.scrollLeft, y = codeEl.scrollTop;
+    hlLayer.style.transform = 'translate(' + (-x) + 'px,' + (-y) + 'px)';
+    linehl.style.transform = 'translate(' + (-x) + 'px,' + (-y) + 'px)';
+    gutter.style.transform = 'translateY(' + (-y) + 'px)';
+  }
+
+  function renderAll() {
+    renderGutter();
+    renderLineHl();
+    renderHighlightText();
+    syncScroll();
+  }
+
+  function setLine(n) {
+    if (n === lastLine) return;
+    lastLine = n;
+    renderGutter();
+    renderLineHl();
+    scrollToLine(n);
+  }
+
+  function scrollToLine(n) {
+    var lh = 24, y = (n - 1) * lh;
+    var viewTop = codeEl.scrollTop, viewH = codeEl.clientHeight - 40;
+    if (y < viewTop || y > viewTop + viewH - lh) {
+      codeEl.scrollTop = Math.max(0, y - viewH / 2);
+      syncScroll();
+    }
+  }
+
+  /* ======================= 编译检查 ======================= */
+
+  var checkTimer = null;
+  function scheduleCheck() {
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(checkCode, 260);
+  }
+
+  function checkCode() {
+    renderGutter();
+    renderLineHl();
+    try {
+      K.compile(codeEl.value);
+      errorLine = 0;
+      setStatus('ok', '语法没问题，可以运行。', '');
+      tagInfo.textContent = lineCount() + ' 行';
+    } catch (e) {
+      errorLine = e.line || 1;
+      renderGutter();
+      renderLineHl();
+      setStatus('err', '第 ' + errorLine + ' 行：' + e.message, e.hint || '');
+      tagInfo.textContent = '有错误';
+    }
+  }
+
+  function setStatus(kind, text, hint) {
+    statusEl.className = 'statusbar on ' + kind;
+    statusEl.innerHTML = '<span>' + esc(text) + '</span>' +
+      (hint ? '<span class="hint">' + esc(hint) + '</span>' : '');
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  /* ======================= 执行 ======================= */
+
+  function stopPlaying() {
+    if (playing) { clearInterval(playing); playing = null; }
+    btnRun.textContent = '运行完';
+    btnRun.classList.add('primary');
+  }
+
+  function resetRun(skipCheck) {
+    stopPlaying();
+    runner = null;
+    stale = true;
+    lastLine = 0;
+    logCount = 0;
+    outputItems = [];
+    errorLine = 0;
+    stage.innerHTML = '<div class="stage-empty">按 F9 运行，或 F8 一句一句走。双击这里（或按 F10）可以「猜结果」。</div>';
+    varsEl.innerHTML = '<div class="vars-empty">定义的变量会出现在这里。</div>';
+    filesEl.className = 'files-body';
+    filesEl.innerHTML = '';
+    logEl.innerHTML = '<div class="log-empty">每执行一步，这里会解释「刚才发生了什么」。</div>';
+    stageTag.textContent = '';
+    logTag.textContent = '';
+    renderGutter();
+    renderLineHl();
+    if (!skipCheck) checkCode();
+  }
+
+  function ensureRunner() {
+    if (runner && !stale) return true;
+    try {
+      K.compile(codeEl.value);
+    } catch (e) {
+      errorLine = e.line || 1;
+      renderGutter(); renderLineHl();
+      setStatus('err', '第 ' + errorLine + ' 行：' + e.message, e.hint || '');
+      return false;
+    }
+    errorLine = 0;
+    renderGutter(); renderLineHl();
+    runner = K.createRunner(codeEl.value, {
+      ask: function (p) {
+        try { var a = window.prompt(p || '请输入'); return a === null ? '' : a; }
+        catch (err) { return ''; }
+      }
+    });
+    stale = false;
+    return true;
+  }
+
+  function varClass(v) {
+    if (Array.isArray(v)) return ' arr';
+    if (typeof v === 'boolean') return ' bool';
+    if (typeof v === 'string') return ' str';
+    return '';
+  }
+
+  function applySnapshot(s) {
+    setLine(s.line);
+
+    // 变量盒子
+    if (!s.vars || s.vars.length === 0) {
+      varsEl.innerHTML = '<div class="vars-empty">这个程序还没有定义任何变量。</div>';
+    } else {
+      varsEl.innerHTML = s.vars.map(function (v) {
+        var name = v[0], val = v[1], declared = v[2];
+        var bump = (s.focus === name) ? ' bump' : '';
+        var typeName = declared || (Array.isArray(val) ? '数组' :
+          typeof val === 'boolean' ? '布尔型' :
+          typeof val === 'string' ? '字符串' :
+          (val && val.__ptr) ? '指针' : (val && val.__file) ? '文件' :
+          (val && val.__func) ? '函数' :
+          typeof val === 'number' ? (Number.isInteger(val) ? '整型' : '浮点型') : '');
+        var disp = (val && val.__file) ? val.__file.name
+                 : (val && val.__func) ? '(函数)'
+                 : K.fmt(val);
+        return '<div class="varbox' + varClass(val) + bump + '">' +
+          '<div class="k">' + esc(name) + (typeName ? '<em>' + esc(typeName) + '</em>' : '') + '</div>' +
+          '<div class="v">' + esc(disp) + '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    // 虚拟文件
+    if (s.files && s.files.length) {
+      filesEl.className = 'files-body on';
+      filesEl.innerHTML = s.files.map(function (f) {
+        var rows = f[1].split('\n');
+        if (rows.length && rows[rows.length - 1] === '') rows.pop();
+        return '<div class="file-card"><div class="fn">' + esc(f[0]) + '</div>' +
+          rows.map(function (l) { return '<div class="fl">' + (esc(l) || '&nbsp;') + '</div>'; }).join('') +
+          '</div>';
+      }).join('');
+    } else {
+      filesEl.className = 'files-body';
+      filesEl.innerHTML = '';
+    }
+
+    // 结果：只追加新增气泡
+    var cur = s.output || [];
+    if (cur.length < outputItems.length) {
+      stage.innerHTML = '';
+      outputItems = [];
+    }
+    for (var oi = outputItems.length; oi < cur.length; oi++) {
+      if (stage.querySelector('.stage-empty')) stage.innerHTML = '';
+      var bub = document.createElement('div');
+      bub.className = 'bubble';
+      bub.textContent = cur[oi];
+      stage.appendChild(bub);
+    }
+    if (cur.length !== outputItems.length) {
+      outputItems = cur.slice();
+      stage.scrollTop = stage.scrollHeight;
+    }
+    stageTag.textContent = outputItems.length ? outputItems.length + ' 句' : '';
+
+    // 旁白
+    logCount++;
+    var row = document.createElement('div');
+    row.className = 'log-row hl';
+    row.innerHTML = '<div class="n">' + s.line + '</div><div class="t">' + esc(s.narration) + '</div>';
+    var olds = logEl.querySelectorAll('.log-row.hl');
+    for (var i = 0; i < olds.length; i++) olds[i].classList.remove('hl');
+    if (logEl.querySelector('.log-empty')) logEl.innerHTML = '';
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+    logTag.textContent = logCount + ' 步';
+  }
+
+  function finishRun(err) {
+    if (err) {
+      setStatus('err', '第 ' + err.line + ' 行运行时出错：' + err.message, err.hint || '');
+    } else {
+      setStatus('good', '程序跑完了，一共 ' + logCount + ' 步。', '');
+    }
+  }
+
+  function step() {
+    if (!ensureRunner()) return false;
+    var r = runner.next();
+    if (r.error) {
+      if (r.error.line) { errorLine = r.error.line; renderGutter(); renderLineHl(); }
+      finishRun(r.error);
+      stopPlaying();
+      return false;
+    }
+    if (r.snapshot) applySnapshot(r.snapshot);
+    if (r.done) { finishRun(null); stopPlaying(); return false; }
+    return true;
+  }
+
+  function runAll() {
+    stopPlaying();
+    if (!ensureRunner()) return;
+    var guard = 0;
+    while (guard < 20000) {
+      if (!step()) return;
+      guard++;
+    }
+    setStatus('err', '这个程序步数太多了，先停下来。', '检查一下循环是不是停不下来');
+  }
+
+  function play(delay) {
+    if (!ensureRunner()) return;
+    stopPlaying();
+    btnRun.textContent = '暂停';
+    btnRun.classList.remove('primary');
+    if (!delay) delay = parseInt(speedEl.value, 10) || 200;
+    playing = setInterval(function () { if (!step()) stopPlaying(); }, delay);
+  }
+
+  /* ======================= 猜结果 ======================= */
+
+  function toggleGuess() {
+    guessBar.classList.toggle('on');
+    if (guessBar.classList.contains('on')) guessInput.focus();
+  }
+
+  function checkGuess() {
+    var guess = guessInput.value.trim();
+    if (!guess) { guessInput.focus(); return; }
+    stopPlaying();
+    resetRun(true);
+    if (!ensureRunner()) return;
+
+    var lastOut = null, guard = 0;
+    while (true) {
+      var r = runner.next();
+      if (r.error) { finishRun(r.error); return; }
+      if (r.snapshot) {
+        lastOut = r.snapshot.output.length ? r.snapshot.output[r.snapshot.output.length - 1] : null;
+        applySnapshot(r.snapshot);
+      }
+      if (r.done) break;
+      if (++guard > 20000) break;
+    }
+
+    var norm = function (s) { return String(s).replace(/\s+/g, '').replace(/[，。！？、,.!?]/g, ''); };
+    if (lastOut === null) {
+      setStatus('err', '这个程序一句话都没输出，没有可以猜的结果。', '');
+    } else if (norm(lastOut) === norm(guess)) {
+      setStatus('good', '猜对了！程序最后输出的是「' + lastOut + '」', '逻辑推理过关');
+    } else {
+      setStatus('err', '猜错了。你猜「' + guess + '」，实际是「' + lastOut + '」', '看看右边的旁白，跟着走一遍就明白了');
+    }
+    guessInput.value = '';
+  }
+
+  /* ======================= 模板插入 ======================= */
+
+  function currentIndent(pos) {
+    var before = codeEl.value.slice(0, pos);
+    var idx = before.lastIndexOf('\n');
+    var lineStr = idx >= 0 ? before.slice(idx + 1) : before;
+    var m = lineStr.match(/^[ \t]*/);
+    return m ? m[0] : '';
+  }
+
+  function insertTemplate(kind) {
+    var tpl = TPLS[kind];
+    if (!tpl) return;
+
+    var start = codeEl.selectionStart, end = codeEl.selectionEnd;
+    var val = codeEl.value;
+    var indent = currentIndent(start);
+    var selected = val.slice(start, end);
+    var inner = indent + '    ';
+    var text;
+
+    if (!tpl.block) {
+      text = tpl.line;
+    } else if (selected.trim()) {
+      var body = selected.split('\n').map(function (l) { return inner + l.trim(); }).join('\n');
+      text = tpl.open + '\n' + body + '\n' + indent + tpl.close;
+    } else {
+      text = tpl.open + '\n' + inner + '\n' + indent + tpl.close;
+    }
+
+    codeEl.value = val.slice(0, start) + text + val.slice(end);
+    codeEl.focus();
+
+    if (!tpl.block) {
+      codeEl.selectionStart = codeEl.selectionEnd = start + text.length;
+    } else {
+      var caret = start + tpl.open.length + 1 + inner.length;
+      codeEl.selectionStart = codeEl.selectionEnd = caret;
+    }
+
+    stale = true;
+    renderAll();
+    scheduleCheck();
+  }
+
+  /* ======================= 事件 ======================= */
+
+  codeEl.addEventListener('input', function () {
+    stale = true;
+    stopPlaying();
+    if (runner || logCount > 0 || outputItems.length) resetRun(true);
+    renderGutter();
+    renderLineHl();
+    scheduleHighlight();
+    scheduleCheck();
+  });
+
+  codeEl.addEventListener('scroll', syncScroll);
+
+  codeEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var s = codeEl.selectionStart, t = codeEl.selectionEnd;
+      codeEl.value = codeEl.value.slice(0, s) + '    ' + codeEl.value.slice(t);
+      codeEl.selectionStart = codeEl.selectionEnd = s + 4;
+      stale = true;
+      renderAll();
+      scheduleCheck();
+    }
+  });
+
+  btnStep.addEventListener('click', doStep);
+
+  function doStep() {
+    stopPlaying();
+    if (!runner || stale) resetRun(true);
+    step();
+  }
+
+  function countSteps() {
+    var r = K.createRunner(codeEl.value);
+    var n = 0;
+    while (n < 500) {
+      var s = r.next();
+      if (s.error) break;
+      n++;
+      if (s.done) break;
+    }
+    return n;
+  }
+
+  btnRun.addEventListener('click', function () {
+    if (playing) { stopPlaying(); return; }
+    if (!runner || stale) resetRun(true);
+    var total = 0;
+    try { total = countSteps(); } catch (e) { total = 500; }
+    if (total > 400) {
+      runAll();
+    } else {
+      var slider = parseInt(speedEl.value, 10) || 200;
+      play(Math.min(slider, Math.max(10, 3500 / Math.max(total, 1))));
+    }
+  });
+
+  btnReset.addEventListener('click', function () { resetRun(false); });
+
+  speedEl.addEventListener('input', function () {
+    if (playing) { stopPlaying(); play(); }
+  });
+
+  guessCheck.addEventListener('click', checkGuess);
+  guessInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') checkGuess(); });
+
+  document.querySelector('.blocks').addEventListener('click', function (e) {
+    var chip = e.target.closest('.chip');
+    if (chip) insertTemplate(chip.dataset.tpl);
+  });
+
+  Object.keys(EXAMPLES).forEach(function (name) {
+    var o = document.createElement('option');
+    o.value = name; o.textContent = name;
+    exSel.appendChild(o);
+  });
+
+  exSel.addEventListener('change', function () {
+    var name = exSel.value;
+    if (!name) return;
+    codeEl.value = EXAMPLES[name];
+    exSel.value = '';
+    resetRun(false);
+    renderAll();
+    codeEl.focus();
+    codeEl.selectionStart = codeEl.selectionEnd = 0;
+    codeEl.scrollTop = 0;
+    syncScroll();
+  });
+
+  stage.addEventListener('dblclick', toggleGuess);
+
+  document.addEventListener('keydown', function (e) {
+    // F 系列快捷键
+    switch (e.key) {
+      case 'F5':
+        e.preventDefault();
+        resetRun(false);
+        return;
+      case 'F8':
+        e.preventDefault();
+        doStep();
+        return;
+      case 'F9':
+        e.preventDefault();
+        runAll();
+        return;
+      case 'F10':
+        e.preventDefault();
+        if (!guessBar.classList.contains('on')) toggleGuess();
+        else guessInput.focus();
+        return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runAll(); }
+  });
+
+  /* ======================= 启动 ======================= */
+
+  var EX_ORDER = Object.keys(EXAMPLES);
+  var qs = {};
+  try { new URLSearchParams(location.search).forEach(function (v, k) { qs[k] = v; }); } catch (e) {}
+
+  var startIdx = parseInt(qs.ex, 10);
+  if (startIdx >= 1 && startIdx <= EX_ORDER.length) {
+    codeEl.value = EXAMPLES[EX_ORDER[startIdx - 1]];
+  } else {
+    codeEl.value = EXAMPLES['② 分支：如果 / 或者如果 / 否则'];
+  }
+
+  resetRun(false);
+  renderAll();
+  checkCode();
+
+  if (qs.run === '1') setTimeout(runAll, 120);
+
+  window.KidLangDemo = {
+    runAll: runAll,
+    play: play,
+    reset: resetRun,
+    step: step,
+    order: EX_ORDER,
+    loadExample: function (name) {
+      if (EXAMPLES[name]) { codeEl.value = EXAMPLES[name]; resetRun(false); renderAll(); }
+    },
+    setCode: function (t) { codeEl.value = t; resetRun(false); renderAll(); },
+    examples: EXAMPLES
+  };
+})();
+</script>
+</body>
+</html>

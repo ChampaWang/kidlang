@@ -1,0 +1,22 @@
+# 依赖
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# 构建产物
+build/dist/
+build/work/
+*.spec
+*.exe
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# 系统
+Thumbs.db
+desktop.ini
