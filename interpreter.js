@@ -66,8 +66,8 @@
   var FULLWIDTH = {
     '（': '(', '）': ')', '［': '[', '］': ']',
     '＋': '+', '－': '-', '＊': '*', '／': '/', '×': '*', '÷': '/', '％': '%',
-    '，': ',', '、': ',',
-    '：': ' ', '；': ' ', '　': ' ', '\t': ' '
+    '，': ',', '、': ',', '：': ':', '．': '.',
+    '；': ' ', '　': ' ', '\t': ' '
   };
 
   var RE_ID_START = /[\u4e00-\u9fa5A-Za-z_]/;
@@ -138,12 +138,12 @@
       // 单字符符号
       var ch = FULLWIDTH[raw] || raw;
       if (ch === ' ') { i++; continue; }
-      if ('+-*/%&()[],'.indexOf(ch) >= 0) { tokens.push({ t: 'op', v: ch, line: line }); i++; continue; }
+      if ('+-*/%&()[],.:'.indexOf(ch) >= 0) { tokens.push({ t: 'op', v: ch, line: line }); i++; continue; }
 
       if (ch === '=') err('这个语言里不用「=」', line, '定义一个值用「定义 名字 是 值」；比较两个值用「等于」');
       if (ch === '{' || ch === '}' || ch === ';') err('这个语言里不用「' + ch + '」', line, '一段程序用「结束」收尾就行');
 
-      err('看不懂这个符号「' + raw + '」', line, '可以用的符号只有 + - * / // % ** ( ) [ ] , & 和引号');
+      err('看不懂这个符号「' + raw + '」', line, '可以用的符号只有 + - * / // % ** ( ) [ ] , : . & 和引号');
     }
 
     tokens.push({ t: 'eof', v: '', line: line });
@@ -155,7 +155,7 @@
   function parse(tokens) {
     var p = 0;
 
-    function peek() { return tokens[p]; }
+    function peek(k) { return tokens[p + (k || 0)] || tokens[tokens.length - 1]; }
     function next() { return tokens[p++]; }
     function isKw(v) { var t = peek(); return t.t === 'kw' && t.v === v; }
     function isOp(v) { var t = peek(); return t.t === 'op' && t.v === v; }
@@ -494,8 +494,8 @@
     function parseAtom() {
       var t = peek();
 
-      if (t.t === 'num') { next(); return { type: 'num', value: t.v, line: t.line }; }
-      if (t.t === 'str') { next(); return { type: 'str', value: t.v, line: t.line }; }
+      if (t.t === 'num') { next(); return parsePostfix({ type: 'num', value: t.v, line: t.line }); }
+      if (t.t === 'str') { next(); return parsePostfix({ type: 'str', value: t.v, line: t.line }); }
       if (t.t === 'chr') { next(); return { type: 'chr', value: t.v, line: t.line }; }
       if (t.t === 'kw' && t.v === '真') { next(); return { type: 'bool', value: true, line: t.line }; }
       if (t.t === 'kw' && t.v === '假') { next(); return { type: 'bool', value: false, line: t.line }; }
@@ -587,13 +587,61 @@
 
     function parsePostfix(node) {
       var t = peek();
+
+      // 下标 / 切片
       if (t.t === 'op' && t.v === '[') {
         next();
-        var idx = parseExpr();
+        var first = isOp(':') ? null : parseExpr();
+
+        if (isOp(':')) {
+          next();
+          var second = (isOp(']') || isOp(':')) ? null : parseExpr();
+          var third = null;
+          if (isOp(':')) {
+            next();
+            third = isOp(']') ? null : parseExpr();
+          }
+          if (!isOp(']')) err('这个方括号没有关上', t.line);
+          next();
+          return parsePostfix({
+            type: 'slice', obj: node,
+            start: first, end: second, step: third, line: t.line
+          });
+        }
+
         if (!isOp(']')) err('这个方括号没有关上', t.line);
         next();
-        return parsePostfix({ type: 'index', obj: node, index: idx, line: t.line });
+        return parsePostfix({ type: 'index', obj: node, index: first, line: t.line });
       }
+
+      // 方法调用： s.大写()   数组.合并(",")
+      if (t.t === 'op' && t.v === '.') {
+        next();
+        var mt = peek();
+        if (mt.t !== 'id' && mt.t !== 'kw') err('「.」后面要跟一个方法名', t.line, '比如 s.大写()、数组.合并(",")');
+
+        // 兼容旧的 a.的值 写法
+        if (mt.v === '的值' && !(peek(1).t === 'op' && peek(1).v === '(')) {
+          next();
+          return parsePostfix({ type: 'deref', value: node, line: t.line });
+        }
+
+        next();
+        var margs = [];
+        if (isOp('(')) {
+          next();
+          while (!isOp(')')) {
+            if (peek().t === 'eof') err('这个括号没有关上', t.line);
+            margs.push(parseExpr());
+            if (isOp(',')) next();
+            else break;
+          }
+          if (!isOp(')')) err('这个括号没有关上', t.line);
+          next();
+        }
+        return parsePostfix({ type: 'method', obj: node, name: mt.v, args: margs, line: t.line });
+      }
+
       if (t.t === 'id' && t.v === '的值') {
         next();
         return parsePostfix({ type: 'deref', value: node, line: t.line });
@@ -770,14 +818,53 @@
 
       case 'index': {
         var obj = evalExpr(e.obj, ctx, scope);
-        var idx = needNum(evalExpr(e.index, ctx, scope), e.line, '下标');
-        if (!Array.isArray(obj)) err('只有数组才能用 [ ] 取元素，这里是' + typeLabel(obj), e.line);
-        if (!Number.isInteger(idx)) err('下标必须是整数', e.line);
-        if (idx < 0 || idx >= obj.length) {
-          err('数组只有 ' + obj.length + ' 个元素，取不到第 ' + idx + ' 个', e.line, '下标从 0 开始数');
+        var idxRaw = needNum(evalExpr(e.index, ctx, scope), e.line, '下标');
+        if (!Number.isInteger(idxRaw)) err('下标必须是整数', e.line, '想要小数请先取整，比如 整型(2.0)');
+
+        if (typeof obj === 'string') {
+          var k = idxRaw < 0 ? obj.length + idxRaw : idxRaw;
+          if (k < 0 || k >= obj.length) {
+            err('这段文字只有 ' + obj.length + ' 个字符，取不到第 ' + idxRaw + ' 个', e.line,
+              '下标从 0 开始；最后一个字符是 [' + (obj.length - 1) + ']，也可以用 [-1]');
+          }
+          return obj[k];
         }
-        return obj[idx];
+
+        if (!Array.isArray(obj)) err('只有数组和文字才能用 [ ] 取元素，这里是' + typeLabel(obj), e.line);
+        var kk = idxRaw < 0 ? obj.length + idxRaw : idxRaw;
+        if (kk < 0 || kk >= obj.length) {
+          err('数组只有 ' + obj.length + ' 个元素，取不到第 ' + idxRaw + ' 个', e.line,
+            '下标从 0 开始数；最后一个元素是 [' + (obj.length - 1) + ']，也可以用 [-1]');
+        }
+        return obj[kk];
       }
+
+      case 'slice': {
+        var so = evalExpr(e.obj, ctx, scope);
+        var isStr = typeof so === 'string';
+        if (!isStr && !Array.isArray(so)) {
+          err('切片只能用在文字和数组上，这里是' + typeLabel(so), e.line);
+        }
+        var len = so.length;
+        var st = e.start === null ? null : needNum(evalExpr(e.start, ctx, scope), e.line, '切片起点');
+        var en = e.end === null ? null : needNum(evalExpr(e.end, ctx, scope), e.line, '切片终点');
+        var sp = e.step === null ? null : needNum(evalExpr(e.step, ctx, scope), e.line, '切片步长');
+        if (st !== null && !Number.isInteger(st)) err('切片起点必须是整数', e.line);
+        if (en !== null && !Number.isInteger(en)) err('切片终点必须是整数', e.line);
+        if (sp !== null && !Number.isInteger(sp)) err('切片步长必须是整数', e.line);
+        if (sp === 0) err('切片步长不能是 0', e.line, '想要原样就写 s[:]，想要反转写 s[::-1]');
+
+        var range = sliceIndices(len, st, en, sp);
+        var res = [];
+        if ((sp === null || sp > 0)) {
+          for (var si = range[0]; si < range[1]; si += (sp || 1)) res.push(so[si]);
+        } else {
+          for (var sj = range[0]; sj > range[1]; sj += sp) res.push(so[sj]);
+        }
+        return isStr ? res.join('') : res;
+      }
+
+      case 'method': return evalMethod(e, ctx, scope);
 
       case 'deref': {
         var pv = evalExpr(e.value, ctx, scope);
@@ -906,6 +993,223 @@
     }
 
     err('不认识的运算符「' + op + '」', e.line);
+  }
+
+  /* ======================= 切片 ======================= */
+
+  // 计算 Python 语义的切片区间 [lo, hi)
+  function sliceIndices(len, start, stop, step) {
+    var s = (step === null || step === undefined) ? 1 : step;
+    var lo, hi;
+    if (s > 0) {
+      lo = (start === null || start === undefined) ? 0
+        : (start < 0 ? Math.max(len + start, 0) : Math.min(start, len));
+      hi = (stop === null || stop === undefined) ? len
+        : (stop < 0 ? Math.max(len + stop, 0) : Math.min(stop, len));
+    } else {
+      lo = (start === null || start === undefined) ? len - 1
+        : (start < 0 ? Math.max(len + start, -1) : Math.min(start, len - 1));
+      hi = (stop === null || stop === undefined) ? -1
+        : (stop < 0 ? Math.max(len + stop, -1) : Math.min(stop, len - 1));
+    }
+    return [lo, hi];
+  }
+
+  /* ======================= 方法调用 ======================= */
+
+  function needStr(v, line, what) {
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' || typeof v === 'boolean') return fmt(v);
+    err('「' + what + '」需要一个文字，这里是' + typeLabel(v), line);
+  }
+
+  function needInt(v, line, what) {
+    var n = needNum(v, line, what);
+    if (!Number.isInteger(n)) err('「' + what + '」需要一个整数', line);
+    return n;
+  }
+
+  function evalMethod(e, ctx, scope) {
+    var recv = evalExpr(e.obj, ctx, scope);
+    var args = [];
+    for (var i = 0; i < e.args.length; i++) args.push(evalExpr(e.args[i], ctx, scope));
+
+    if (typeof recv === 'string') return strMethod(recv, e.name, args, e.line);
+    if (Array.isArray(recv)) return arrMethod(recv, e.name, args, e.line);
+
+    err('这个值没有「' + e.name + '」这个方法', e.line,
+      '方法只能用在文字和数组上，这里是' + typeLabel(recv));
+  }
+
+  function padTo(s, width, fill, side, line) {
+    var f = fill === undefined ? ' ' : needStr(fill, line, '填充字符');
+    if (!f.length) err('填充字符不能是空文字', line);
+    if (s.length >= width) return s;
+    var need = width - s.length;
+    var pad = '';
+    while (pad.length < need) pad += f;
+    pad = pad.slice(0, need);
+    if (side === 'right') return s + pad;
+    if (side === 'center') {
+      var l = Math.floor(need / 2), r = need - l;
+      return pad.slice(0, l) + s + pad.slice(0, r);
+    }
+    return pad + s;
+  }
+
+  function replaceN(s, from, to, n) {
+    if (!from) return s;
+    var out = '', i = 0, c = 0;
+    while (c < n) {
+      var p = s.indexOf(from, i);
+      if (p < 0) break;
+      out += s.slice(i, p) + to;
+      i = p + from.length;
+      c++;
+    }
+    return out + s.slice(i);
+  }
+
+  function strMethod(s, name, args, line) {
+    switch (name) {
+      case '长度': return s.length;
+      case '大写': return s.toUpperCase();
+      case '小写': return s.toLowerCase();
+      case '首字母大写': return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+      case '每个词首字母大写':
+        return s.replace(/[A-Za-z]+/g, function (w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); });
+      case '去空白': return s.trim();
+      case '去左空白': return s.replace(/^\s+/, '');
+      case '去右空白': return s.replace(/\s+$/, '');
+      case '反转': return s.split('').reverse().join('');
+      case '全是数字': return s.length > 0 && /^[0-9]+$/.test(s);
+      case '全是字母': return s.length > 0 && /^[A-Za-z\u4e00-\u9fff]+$/.test(s);
+      case '全是空白': return s.length > 0 && /^\s+$/.test(s);
+
+      case '字符码':
+        if (!s.length) err('空文字没有字符码', line, '先确认这个字符串不是空的');
+        return s.charCodeAt(0);
+
+      case '查找': {
+        var sub = needStr(args[0], line, '查找');
+        var from = args.length > 1 ? needInt(args[1], line, '查找') : 0;
+        return s.indexOf(sub, from);
+      }
+
+      case '替换': {
+        var a = needStr(args[0], line, '替换');
+        var b = needStr(args[1], line, '替换');
+        if (args.length > 2) {
+          var cnt = needInt(args[2], line, '替换');
+          return replaceN(s, a, b, cnt < 0 ? Infinity : cnt);
+        }
+        return s.split(a).join(b);
+      }
+
+      case '分割': {
+        if (args.length === 0) return s.split(/\s+/).filter(function (x) { return x !== ''; });
+        var sep = needStr(args[0], line, '分割');
+        if (sep === '') return s.split('');
+        return s.split(sep);
+      }
+
+      case '行分割': {
+        var ls = s.split(/\r?\n/);
+        if (ls.length && ls[ls.length - 1] === '') ls.pop();
+        return ls;
+      }
+
+      case '开头是': return s.indexOf(needStr(args[0], line, '开头是')) === 0;
+      case '结尾是': {
+        var suf = needStr(args[0], line, '结尾是');
+        return suf.length <= s.length && s.slice(s.length - suf.length) === suf;
+      }
+      case '包含': return s.indexOf(needStr(args[0], line, '包含')) >= 0;
+      case '出现次数': {
+        var needle = needStr(args[0], line, '出现次数');
+        if (!needle) return 0;
+        var n = 0, pos = 0;
+        while ((pos = s.indexOf(needle, pos)) >= 0) { n++; pos += needle.length; }
+        return n;
+      }
+
+      case '去掉前缀': {
+        var pre = needStr(args[0], line, '去掉前缀');
+        return (s.indexOf(pre) === 0) ? s.slice(pre.length) : s;
+      }
+      case '去掉后缀': {
+        var sfx = needStr(args[0], line, '去掉后缀');
+        return (sfx.length <= s.length && s.slice(s.length - sfx.length) === sfx) ? s.slice(0, s.length - sfx.length) : s;
+      }
+
+      case '补左': {
+        var w1 = needInt(args[0], line, '补左');
+        return padTo(s, w1, args[1], 'left', line);
+      }
+      case '补右': {
+        var w2 = needInt(args[0], line, '补右');
+        return padTo(s, w2, args[1], 'right', line);
+      }
+      case '居中': {
+        var w3 = needInt(args[0], line, '居中');
+        return padTo(s, w3, args[1], 'center', line);
+      }
+    }
+
+    err('文字没有「' + name + '」这个方法', line,
+      '常用的有：大写 小写 去空白 查找 替换 分割 开头是 结尾是 包含 出现次数 补左 补右 居中 反转');
+  }
+
+  function arrMethod(a, name, args, line) {
+    switch (name) {
+      case '长度': return a.length;
+
+      case '合并': {
+        var sep = args.length ? needStr(args[0], line, '合并') : '';
+        return a.map(function (x) { return fmt(x); }).join(sep);
+      }
+
+      case '反转': return a.slice().reverse();
+
+      case '查找': {
+        var t1 = args[0];
+        for (var i = 0; i < a.length; i++) if (fmt(a[i]) === fmt(t1)) return i;
+        return -1;
+      }
+
+      case '包含': {
+        var t2 = fmt(args[0]);
+        for (var j = 0; j < a.length; j++) if (fmt(a[j]) === t2) return true;
+        return false;
+      }
+
+      case '排序':
+        return a.slice().sort(function (x, y) {
+          if (typeof x === 'number' && typeof y === 'number') return x - y;
+          return fmt(x) < fmt(y) ? -1 : (fmt(x) > fmt(y) ? 1 : 0);
+        });
+
+      case '降序排序':
+        return a.slice().sort(function (x, y) {
+          if (typeof x === 'number' && typeof y === 'number') return y - x;
+          return fmt(y) < fmt(x) ? -1 : (fmt(y) > fmt(x) ? 1 : 0);
+        });
+
+      case '求和':
+        return a.reduce(function (s, x) { return s + needNum(x, line, '求和'); }, 0);
+
+      case '添加': {
+        a.push(args[0]);
+        return a;
+      }
+
+      case '删除末位': {
+        return a.pop();
+      }
+    }
+
+    err('数组没有「' + name + '」这个方法', line,
+      '常用的有：长度 合并 反转 查找 包含 排序 降序排序 求和 添加 删除末位');
   }
 
   function callNative(e, ctx, scope) {

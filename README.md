@@ -4,7 +4,7 @@
 
 ![语言](https://img.shields.io/badge/语言-中文-4f46e5)
 ![依赖](https://img.shields.io/badge/零依赖-单文件-0d9b6c)
-![测试](https://img.shields.io/badge/测试-69%20通过-0d9b6c)
+![测试](https://img.shields.io/badge/测试-129%20通过-0d9b6c)
 ![协议](https://img.shields.io/badge/协议-MIT-blue)
 
 *KidLang — a programming language whose keywords are Chinese, built to make every step of execution visible.*
@@ -153,6 +153,28 @@ python build/build-exe.py
 
 四则运算语义同 Python：`+ - * / // % **`（`//` 整除，`**` 乘方）
 
+字符串搬的是 Python 那一整套：**索引、切片、方法**。
+
+```
+定义 字符串 s 是 "Hello"
+
+输出 s[0]        # H         索引从 0 开始
+输出 s[-1]       # o         负数从末尾数
+输出 s[0:2]      # He        切片：起点:终点，终点不含
+输出 s[::-1]     # olleH     步长 -1 就是反转
+输出 s[2:]       # llo       省略终点就到末尾
+
+输出 "a,b,c".分割(",")[1]        # b
+输出 "  x  ".去空白()            # x
+输出 "1,2,3".分割(",").长度()    # 3     可以链式
+```
+
+字符串方法：`长度` `大写` `小写` `去空白` `查找` `替换` `分割` `行分割` `开头是` `结尾是` `包含` `出现次数` `补左` `补右` `居中` `反转` `去掉前缀` `去掉后缀` `字符码`
+
+数组方法：`长度` `合并` `反转` `排序` `降序排序` `查找` `包含` `求和` `添加` `删除末位`
+
+方法名不是关键字——`大写`、`查找`、`反转` 这些词照样能当变量名。
+
 完整语法见 **[docs/SPEC.md](docs/SPEC.md)**，或下载 [使用手册 PDF](docs/handbook.pdf)。
 
 ---
@@ -190,7 +212,7 @@ python build/build-exe.py
 .
 ├── index.html            界面（单文件，无构建步骤）
 ├── interpreter.js        解释器：词法 → 语法 → 生成器执行
-├── test.js               69 条测试用例
+├── test.js               129 条测试用例
 ├── examples/             九个示例程序（.kid）
 ├── docs/
 │   ├── SPEC.md           语言规范
@@ -211,7 +233,7 @@ python build/build-exe.py
 ## 开发
 
 ```bash
-node test.js        # 69 条测试
+node test.js        # 129 条测试
 ```
 
 测试覆盖：类型检查、Python 语义的取余与整除、三种循环、递归、二维数组、指针读写、文件追加、全角标点、挤成一行、不缩进等「孩子会怎么乱写」的场景。
