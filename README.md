@@ -33,13 +33,11 @@
 
 ### 方式一：在线玩
 
-如果仓库开了 GitHub Pages，直接访问：
+直接打开：
 
-```
-https://<你的用户名>.github.io/kidlang/
-```
+**https://champawang.github.io/kidlang/**
 
-（仓库 Settings → Pages → Source 选 **GitHub Actions**，推一次代码就自动部署，见 `.github/workflows/deploy.yml`）
+手机电脑都能用，不用装任何东西。
 
 ### 方式二：下载单文件
 
